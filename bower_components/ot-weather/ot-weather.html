@@ -1,0 +1,205 @@
+<link rel="import" href="../iron-ajax/iron-ajax.html">
+<link rel="import" href="../iron-image/iron-image.html">
+<link rel="import" href="../iron-icons/iron-icons.html">
+<link rel="import" href="../paper-fab/paper-fab.html">
+<link rel="import" href="../ot-current/ot-current.html">
+<link rel="import" href="../ot-forecast/ot-forecast.html">
+<link rel="import" href="../neon-animation/neon-animated-pages.html">
+<link rel="import" href="../neon-animation/neon-animatable.html">
+<link rel="import" href="../neon-animation/neon-animations.html">
+<link rel="import" href="../paper-spinner/paper-spinner.html">
+<link rel="import" href="../paper-styles/paper-styles.html">
+<dom-module id="ot-weather">
+	<style is="custom-style">
+		:host{
+			width: 100%;
+			height: 100%;
+			overflow: hidden;
+			display: block;
+		}
+		iron-image{
+			width: 100%;
+			height: 100%;
+			position: absolute;
+			background-color: lightgrey;
+		}
+		#pages{
+			position: absolute;
+			width: 100%;
+			height: 100%;
+		}
+		paper-spinner{
+			margin: 0 auto;
+			margin-top: 20px;
+			margin-left: auto;
+			margin-right: auto;
+			display: block;
+
+		--paper-spinner-layer-1-color: var(--paper-blue-500);
+	        --paper-spinner-layer-2-color: var(--paper-red-500);
+	        --paper-spinner-layer-3-color: var(--paper-yellow-500);
+	        --paper-spinner-layer-4-color: var(--paper-green-500);
+		}
+	</style>
+	<template>
+		<iron-image sizing="cover" preload src="{{imageSrc}}" fade></iron-image>
+		<div style="width: 100%; height: 100%; position:absolute;">
+			<paper-spinner alt="Cargando el tiempo..." id="spinner" active></paper-spinner>
+		</div>
+		<iron-ajax id="currentIron"
+			auto
+			handle-as="json"
+			on-response="getCurrentData"></iron-ajax>
+		<iron-ajax id="forecastIron"
+			auto
+			handle-as="json"
+			on-response="getForecastData"></iron-ajax>
+
+		<neon-animated-pages id="pages" class="flex" entry-animation="{{entryAnimation}}" exit-animation="{{exitAnimation}}"
+			on-track="handleTrack">
+			<neon-animatable>
+				<ot-current id="currentWeather"></ot-current>
+			</neon-animatable>
+			<neon-animatable>
+				<ot-forecast id="forecast"></ot-forecast>
+			</neon-animatable>
+		</neon-animated-pages>
+
+	</template>
+</dom-module>
+
+<script type="text/javascript" src="moment.min.js"></script>
+<script>
+	Polymer({
+		is: 'ot-weather',
+		properties: {
+			imageSrc: String
+		},
+        //Funcion para manejar los errores del posicionamiento GPS del navegador.
+        showError: function(error){
+            switch(error.code) {
+                case error.PERMISSION_DENIED:
+                    alert("Petición de Geolocalización denegada.");
+                    //req_localS_pos();//Funcion para almacenar y extraer la ultima posicion almacenada en localDB NO IMPLEMENTADA!!
+                    break;
+                case error.POSITION_UNAVAILABLE:
+                    alert("Información de localización no disponible.");
+                    //req_localS_pos();
+                    break;
+                case error.TIMEOUT:
+                    alert("Tiempo de espera de localización agotado.");
+                    //req_localS_pos();
+                    break;
+                case error.UNKNOWN_ERROR:
+                    alert("Error desconocido al pedir la geolocalización.");
+                    //req_localS_pos();
+                    break;
+            }
+        },
+        //Funcion de inicializacion del webcomponent de polymer.
+		ready: function(){
+			//this.imageSrc = "img/splash.png";
+			//this.$.spinner.active = true;
+			this.$.pages.selected = 0;
+			this.entryAnimation = 'slide-up-animation';
+			this.exitAnimation = 'fade-out-animation';
+			var element = this;
+			if (navigator.geolocation) {
+		        navigator.geolocation.getCurrentPosition(
+							function(position){
+              console.log("LAt: "+position.coords.latitude+" - LOng: "+position.coords.longitude);
+		        	var urlForecast = "http://api.openweathermap.org/data/2.5/forecast/daily?lat=" + position.coords.latitude + "&lon=" + position.coords.longitude + "&cnt=16&mode=json&lang=es&units=metric&APPID=9924d4737907b444dba2c915f9e607d5";
+				    	var urlCurrent = "http://api.openweathermap.org/data/2.5/weather?lat=" + position.coords.latitude + "&lon=" + position.coords.longitude + "&units=metric&lang=es&APPID=9924d4737907b444dba2c915f9e607d5";
+
+				    element.$.currentIron.url = urlCurrent;
+				    element.$.forecastIron.url = urlForecast;
+						element.$.spinner.active = false;
+					},
+					function(error){
+						element.$.spinner.active = false;
+
+					},
+					{timeout: 30000, enableHighAccuracy: true, maximumAge: 75000});
+		    }
+		},
+        //Funcion que extrae la informacion del tiempo actual
+		getCurrentData: function(event){
+			//console.log(event);
+			var response = event.detail.response;
+            if (response) { //Comprobamos que el objeto array response no sea null
+			//Cargamos la imagen correspondiente gracias al nombre del icono proporcionado por el REST
+			//Se pueden personalizar o usar otros servicios a conveniencia.
+			this.imageSrc = "img/" + String(response.weather['0'].icon) + "_bg.jpg";
+			var current = this.$.currentWeather;
+			console.log(response);
+
+			current.temp = Number(response.main.temp).toFixed(1) + "ºC";
+			current.humidity = Number(response.main.humidity) + "%";
+			current.city = response.name;
+			current.desc = response.weather['0'].description;
+            } //IF
+		},
+        //Funcion que extrae la prevision del tiempo.
+		getForecastData: function(event){
+            if (event.detail.response) { //Comprobamos que el objeto array list no sea null
+//			console.log(event.detail.response);
+			var response = event.detail.response;
+			var forecast = this.$.forecast;
+			console.log(response);
+			var list = response.list;
+			for (var i = 0; i < list.length; i++) {
+				list[i].icon = "img/" + list[i].weather['0'].icon + ".png";
+				list[i].desc = this.capitalize(list[i].weather[0].description);
+				list[i].humidity = list[i].humidity + "%";
+				list[i].temp.max = Number(list[i].temp.max).toFixed(1) + "º";
+				list[i].temp.min = Number(list[i].temp.min).toFixed(1) + "º";
+
+				var day = moment.unix(Number(list[i].dt));
+				day.locale('es');
+				list[i].date = day.format("dddd[, ]DD/MM/YYYY");
+			};
+
+			forecast.list = list;
+            } //IF
+		},
+		capitalize: function(s) {
+			return s[0].toUpperCase() + s.slice(1);
+		},
+		handleTrack: function(e){
+			switch(e.detail.state) {
+				case 'start':
+					this.sizeTapped = e.detail.y;
+					//console.log(this.sizeTapped);
+					break;
+				case 'track':
+
+
+					break;
+				case 'end':
+					if(this.$.pages.selected == 0){
+						if(e.detail.y < (this.sizeTapped-100)){
+
+							this.exitAnimation = 'slide-up-animation';
+							this.entryAnimation = 'fade-in-animation';
+							this.$.pages.selected = 1;
+						}
+					}
+					if(this.$.pages.selected == 1 && this.sizeTapped < 50){
+						if(e.detail.y > (this.sizeTapped+100)){
+
+							this.exitAnimation = 'fade-out-animation';
+							this.entryAnimation = 'slide-down-animation';
+							this.$.pages.selected = 0;
+						}
+					}
+					break;
+			}
+		},
+        selPage: function(p){
+            this.$.pages.selected = p;
+        },
+		getDataByPosition: function(position) {
+
+		}
+	});
+</script>
